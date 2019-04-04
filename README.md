@@ -42,7 +42,51 @@ cp ~/Downloads/oracle-database-xe-18c-1.0-1.x86_64.rpm files/
 docker build -t oracle-xe:18c .
 ```
 
-## Run Container
+## Run Container for me as newbie
+
+```bash
+docker run -d \
+  -p 1521:1521 \
+  -p 35518:5500 \
+  --name=oracle-xe \
+  --network=oracle_network \
+  oracle-xe:18c
+```
+
+* do not use the `--volume` as there is troubles to configure the permissions to the `~/docker` directory.
+  There is need to be more investigation what to set or if newer docker version (using 1.13.1) is about to be fine
+
+* to check the state how the oracle is starting `docker logs oracle-xe -f`
+
+* go log in inside of the container for you can create users for further use from the localhost
+
+```bash
+docker exec -it oracle-xe bash -c "source /home/oracle/.bashrc; bash"
+$ORACLE_HOME/bin/sqlplus sys/Oracle18@localhost/XE as sysdba
+```
+
+* when DB is started needed to create a user ([howto](https://www.dummies.com/programming/databases/basics-of-users-and-schemas-in-oracle-12c/), [troubles on creation](https://stackoverflow.com/questions/33330968/error-ora-65096-invalid-common-user-or-role-name-in-oracle))
+
+```sql
+alter session set "_ORACLE_SCRIPT"=true;
+create user crashrec identified by "crashrec";
+grant connect to crashrec;
+grant resource to crashrec;
+create role crashrec_user;
+grant create session to crashrec_user;
+# solving: "ORA-01950: no privileges on tablespace 'USERS'"
+alter user crashrec quota 100M on USERS;
+# XA stuff: https://access.redhat.com/documentation/en-us/jboss_enterprise_application_platform/6.2/html/administration_and_configuration_guide/example_oracle_xa_datsource1
+GRANT SELECT ON sys.dba_pending_transactions TO crashrec;
+GRANT SELECT ON sys.pending_trans$ TO crashrec;
+GRANT SELECT ON sys.dba_2pc_pending TO crashrec;
+GRANT EXECUTE ON sys.dbms_xa TO crashrec; 
+```
+
+* to connect with the JDBC SQL client from localhost use like: `jdbc:oracle:thin:@localhost:1521:XE`, credentials: `crashrec/crashrec`
+* XA stuff - connection and if XA works could be tested with https://github.com/ochaloup/xa-jdbc-driver
+
+## Run Container (original)
 
 _Note first time will take a a while to run for as the `oracle-xe configure` script needs to complete_
 
